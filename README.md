@@ -8,7 +8,7 @@ Press "**N**" or go mods config, The key can be changed under Controls.
 
 Click **Text** or **Background**, then drag in the square for shade, the rainbow strip for hue and the chequered strip for opacity. The hex box takes `#RRGGBB` if you'd rather type the colors hex code instead. **Reset** button puts your nameplate back to vanilla.
 
-Turn on **Show my nameplate in F5** to see your own nameplate in third person while you try out colours.
+Turn on **Show my nameplate in F5** to see your own nameplate in third person while you try out colors.
 
 ## Install
 
