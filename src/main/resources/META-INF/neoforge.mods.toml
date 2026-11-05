@@ -6,6 +6,7 @@ license="MIT"
 modId="nameplatesplus"
 version="1.0.0"
 displayName="Nameplates+"
+authors="Jankat"
 description="Pick the colour of your nameplate text and its background."
 
 [[dependencies.nameplatesplus]]
