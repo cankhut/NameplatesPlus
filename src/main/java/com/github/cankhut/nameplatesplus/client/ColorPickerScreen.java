@@ -1,3 +1,4 @@
+
 package com.github.cankhut.nameplatesplus.client;
 
 import com.github.cankhut.nameplatesplus.ClientConfig;
@@ -6,7 +7,6 @@ import com.github.cankhut.nameplatesplus.client.render.GradientRenderContext;
 import com.github.cankhut.nameplatesplus.util.Gradient;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -14,31 +14,30 @@ import org.jetbrains.annotations.Nullable;
 
 public class ColorPickerScreen extends Screen {
 
-    private static final int PANEL_W = 214;
-    private static final int PANEL_H = 264;
+    private static final int MAX_PANEL_W = 320;
+    private static final int MAX_PANEL_H = 172;
 
-    private static final int PAD = 9;
-    private static final int CONTENT_W = PANEL_W - PAD * 2;
+    private static final int PAD = 10;
+    private static final int COLUMN_GAP = 8;
 
-    private static final int SV_H = 64;
-    private static final int STRIP_H = 10;
-
-    private static final int TAB_Y = 22;
-    private static final int TAB_W = 47;
     private static final int TAB_GAP = 2;
 
-    private static final int SV_Y = 44;
-    private static final int HUE_Y = 114;
-    private static final int ALPHA_Y = 130;
-    private static final int ROW_Y = 146;
-    private static final int PRESET_Y = 168;
+    private static final int SV_Y = 34;
+    private static final int HUE_Y = 79;
+    private static final int ALPHA_Y = 89;
+    private static final int HEX_Y = 100;
 
-    private static final int GRADIENT_TOGGLE_Y = 192;
-    private static final int OWN_TOGGLE_Y = 212;
-    private static final int BUTTON_Y = 236;
+    private static final int PREVIEW_Y = 34;
+    private static final int PREVIEW_H = 18;
 
-    private static final int SWATCH_COUNT = 10;
-    private static final int SWATCH_W = 18;
+    private static final int PRESET_TITLE_Y = 55;
+    private static final int PRESET_START_Y = 66;
+    private static final int PRESET_ROW_H = 13;
+    private static final int PRESET_ROW_GAP = 1;
+    private static final int PRESET_COUNT = 5;
+
+    private static final int TOGGLE_Y = 137;
+    private static final int ACTION_Y = 153;
 
     private static final int[] PRESETS = {
             0xFFFFFF,
@@ -97,8 +96,27 @@ public class ColorPickerScreen extends Screen {
     private Button gradientStartTab;
     private Button gradientEndTab;
 
+    private Button doneButton;
+    private Button resetButton;
+    private Button cancelButton;
+
     private int left;
     private int top;
+
+    private int panelWidth;
+    private int panelHeight;
+
+    private int contentX;
+    private int contentWidth;
+
+    private int leftColumnWidth;
+    private int rightX;
+    private int rightColumnWidth;
+
+    private int presetPreviewWidth;
+    private int presetActionWidth;
+
+    private float verticalScale = 1.0F;
 
     public ColorPickerScreen(@Nullable Screen parent) {
         super(Component.translatable("screen.nameplatesplus.title"));
@@ -107,72 +125,160 @@ public class ColorPickerScreen extends Screen {
 
         ColorPair saved = ClientConfig.get();
 
-        this.textColor = saved.text();
-        this.backgroundColor = saved.background();
+        textColor = saved.text();
+        backgroundColor = saved.background();
 
-        this.textGradientEnabled = saved.textGradientEnabled();
-        this.textGradientStart = saved.textGradientStart();
-        this.textGradientEnd = saved.textGradientEnd();
+        textGradientEnabled = saved.textGradientEnabled();
+        textGradientStart = saved.textGradientStart();
+        textGradientEnd = saved.textGradientEnd();
 
-        this.showOwnNameplate = ClientConfig.SHOW_OWN_NAMEPLATE.getAsBoolean();
+        showOwnNameplate =
+                ClientConfig.SHOW_OWN_NAMEPLATE.getAsBoolean();
+    }
+
+    private int sy(int value) {
+        return Math.round(value * verticalScale);
+    }
+
+    private int topY(int offset) {
+        return top + sy(offset);
+    }
+
+    private int scaled(int value) {
+        return Math.max(1, sy(value));
+    }
+
+    private int presetRowY(int slot) {
+        return topY(PRESET_START_Y)
+                + slot * (presetRowHeight() + presetRowGap());
+    }
+
+    private int presetRowHeight() {
+        return Math.max(11, scaled(PRESET_ROW_H));
+    }
+
+    private int presetRowGap() {
+        return Math.max(1, scaled(PRESET_ROW_GAP));
+    }
+
+    private int presetPreviewX() {
+        return rightX + 10;
+    }
+
+    private int presetLoadX() {
+        return presetPreviewX() + presetPreviewWidth + 2;
+    }
+
+    private int presetSaveX() {
+        return presetLoadX() + presetActionWidth + 2;
+    }
+
+    private int toggleWidth() {
+        return (contentWidth - 4) / 2;
+    }
+
+    private int toggleY() {
+        return topY(TOGGLE_Y);
+    }
+
+    private int actionY() {
+        return topY(ACTION_Y);
     }
 
     @Override
     protected void init() {
-        left = (this.width - PANEL_W) / 2;
-        top = (this.height - PANEL_H) / 2;
+        panelWidth = Math.min(MAX_PANEL_W, this.width - 8);
+        panelHeight = Math.min(MAX_PANEL_H, this.height - 8);
 
-        int contentX = left + PAD;
+        left = (this.width - panelWidth) / 2;
+        top = (this.height - panelHeight) / 2;
 
-        // Text tab
+        verticalScale = Math.min(
+                1.0F,
+                Math.max(0.65F, (panelHeight - 8) / 164.0F)
+        );
+
+        contentX = left + PAD;
+        contentWidth = panelWidth - PAD * 2;
+
+        int availableColumns = contentWidth - COLUMN_GAP;
+
+        leftColumnWidth = Math.round(availableColumns * 0.58F);
+        rightColumnWidth = availableColumns - leftColumnWidth;
+
+        rightX = contentX + leftColumnWidth + COLUMN_GAP;
+
+        presetActionWidth = Math.max(
+                18,
+                Math.min(28, (rightColumnWidth - 26) / 2)
+        );
+
+        presetPreviewWidth = Math.max(
+                12,
+                rightColumnWidth - 14 - presetActionWidth * 2
+        );
+
+        createTabs();
+        createHexBox();
+        createActionButtons();
+
+        showOfflineNotice =
+                ClientGameEvents.isConnected()
+                        && !ClientGameEvents.serverHasMod();
+
+        loadTarget();
+    }
+
+    private void createTabs() {
+        int tabWidth = (contentWidth - TAB_GAP * 3) / 4;
+        int tabHeight = Math.max(12, scaled(14));
+        int tabY = topY(15);
+
         textTab = Button.builder(
                         Component.literal("Text"),
                         b -> selectTarget(ColorTarget.TEXT)
                 )
                 .bounds(
                         contentX,
-                        top + TAB_Y,
-                        TAB_W,
-                        16
+                        tabY,
+                        tabWidth,
+                        tabHeight
                 )
                 .build();
 
-        // Background tab
         backgroundTab = Button.builder(
                         Component.literal("BG"),
                         b -> selectTarget(ColorTarget.BACKGROUND)
                 )
                 .bounds(
-                        contentX + TAB_W + TAB_GAP,
-                        top + TAB_Y,
-                        TAB_W,
-                        16
+                        contentX + tabWidth + TAB_GAP,
+                        tabY,
+                        tabWidth,
+                        tabHeight
                 )
                 .build();
 
-        // Gradient start tab
         gradientStartTab = Button.builder(
                         Component.literal("Grad A"),
                         b -> selectTarget(ColorTarget.GRADIENT_START)
                 )
                 .bounds(
-                        contentX + (TAB_W + TAB_GAP) * 2,
-                        top + TAB_Y,
-                        TAB_W,
-                        16
+                        contentX + (tabWidth + TAB_GAP) * 2,
+                        tabY,
+                        tabWidth,
+                        tabHeight
                 )
                 .build();
 
-        // Gradient end tab
         gradientEndTab = Button.builder(
                         Component.literal("Grad B"),
                         b -> selectTarget(ColorTarget.GRADIENT_END)
                 )
                 .bounds(
-                        contentX + (TAB_W + TAB_GAP) * 3,
-                        top + TAB_Y,
-                        TAB_W,
-                        16
+                        contentX + (tabWidth + TAB_GAP) * 3,
+                        tabY,
+                        tabWidth,
+                        tabHeight
                 )
                 .build();
 
@@ -180,14 +286,21 @@ public class ColorPickerScreen extends Screen {
         addRenderableWidget(backgroundTab);
         addRenderableWidget(gradientStartTab);
         addRenderableWidget(gradientEndTab);
+    }
 
-        // HEX input
+    private void createHexBox() {
+        int hexX = contentX + 23;
+        int hexY = topY(HEX_Y);
+
+        int hexWidth = Math.max(30, leftColumnWidth - 23);
+        int hexHeight = Math.max(12, scaled(15));
+
         hexBox = new EditBox(
                 this.font,
-                contentX + 22,
-                top + ROW_Y,
-                72,
-                16,
+                hexX,
+                hexY,
+                hexWidth,
+                hexHeight,
                 Component.empty()
         );
 
@@ -195,94 +308,66 @@ public class ColorPickerScreen extends Screen {
         hexBox.setResponder(this::onHexTyped);
 
         addRenderableWidget(hexBox);
+    }
 
-        // Gradient toggle
-        addRenderableWidget(
-                CycleButton.onOffBuilder(textGradientEnabled)
-                        .create(
-                                contentX,
-                                top + GRADIENT_TOGGLE_Y,
-                                CONTENT_W,
-                                16,
-                                Component.literal("Text gradient"),
-                                (button, value) -> textGradientEnabled = value
-                        )
+    private void createActionButtons() {
+        int gap = 5;
+        int buttonWidth = (contentWidth - gap * 2) / 3;
+        int buttonHeight = Math.max(13, scaled(16));
+        int y = actionY();
+
+        doneButton = Button.builder(
+                        Component.translatable("gui.done"),
+                        b -> {
+                            apply();
+                            onClose();
+                        }
+                )
+                .bounds(
+                        contentX,
+                        y,
+                        buttonWidth,
+                        buttonHeight
+                )
+                .build();
+
+        resetButton = Button.builder(
+                        Component.translatable("screen.nameplatesplus.reset"),
+                        b -> resetColors()
+                )
+                .bounds(
+                        contentX + buttonWidth + gap,
+                        y,
+                        buttonWidth,
+                        buttonHeight
+                )
+                .build();
+
+        cancelButton = Button.builder(
+                        Component.translatable("gui.cancel"),
+                        b -> onClose()
+                )
+                .bounds(
+                        contentX + (buttonWidth + gap) * 2,
+                        y,
+                        buttonWidth,
+                        buttonHeight
+                )
+                .build();
+
+        addRenderableWidget(doneButton);
+        addRenderableWidget(resetButton);
+        addRenderableWidget(cancelButton);
+    }
+
+    private ColorPair currentColors() {
+        return new ColorPair(
+                textColor,
+                backgroundColor,
+                textGradientEnabled,
+                textGradientStart,
+                textGradientEnd
         );
-
-        // Own nameplate toggle
-        addRenderableWidget(
-                CycleButton.onOffBuilder(showOwnNameplate)
-                        .create(
-                                contentX,
-                                top + OWN_TOGGLE_Y,
-                                CONTENT_W,
-                                16,
-                                Component.translatable("screen.nameplatesplus.show_own"),
-                                (button, value) -> showOwnNameplate = value
-                        )
-        );
-
-        // Done
-        addRenderableWidget(
-                Button.builder(
-                                Component.translatable("gui.done"),
-                                b -> {
-                                    apply();
-                                    onClose();
-                                }
-                        )
-                        .bounds(
-                                contentX,
-                                top + BUTTON_Y,
-                                62,
-                                20
-                        )
-                        .build()
-        );
-
-        // Reset colors
-        addRenderableWidget(
-                Button.builder(
-                                Component.translatable("screen.nameplatesplus.reset"),
-                                b -> {
-                                    textColor = ColorPair.DEFAULT_TEXT;
-                                    backgroundColor = ColorPair.DEFAULT_BACKGROUND;
-
-                                    textGradientStart = ColorPair.DEFAULT_GRADIENT_START;
-                                    textGradientEnd = ColorPair.DEFAULT_GRADIENT_END;
-
-                                    loadTarget();
-                                }
-                        )
-                        .bounds(
-                                contentX + 67,
-                                top + BUTTON_Y,
-                                62,
-                                20
-                        )
-                        .build()
-        );
-
-        // Cancel
-        addRenderableWidget(
-                Button.builder(
-                                Component.translatable("gui.cancel"),
-                                b -> onClose()
-                        )
-                        .bounds(
-                                contentX + 134,
-                                top + BUTTON_Y,
-                                62,
-                                20
-                        )
-                        .build()
-        );
-
-        showOfflineNotice =
-                ClientGameEvents.isConnected() &&
-                        !ClientGameEvents.serverHasMod();
-
-        loadTarget();
     }
 
     private void selectTarget(ColorTarget newTarget) {
@@ -336,13 +421,17 @@ public class ColorPickerScreen extends Screen {
         int rgb = hsvToRgb(hue, sat, val);
 
         switch (target) {
-            case TEXT -> textColor = ColorPair.withAlpha(rgb, alpha);
+            case TEXT ->
+                    textColor = ColorPair.withAlpha(rgb, alpha);
 
-            case BACKGROUND -> backgroundColor = ColorPair.withAlpha(rgb, alpha);
+            case BACKGROUND ->
+                    backgroundColor = ColorPair.withAlpha(rgb, alpha);
 
-            case GRADIENT_START -> textGradientStart = rgb & 0xFFFFFF;
+            case GRADIENT_START ->
+                    textGradientStart = rgb & 0xFFFFFF;
 
-            case GRADIENT_END -> textGradientEnd = rgb & 0xFFFFFF;
+            case GRADIENT_END ->
+                    textGradientEnd = rgb & 0xFFFFFF;
         }
     }
 
@@ -386,16 +475,54 @@ public class ColorPickerScreen extends Screen {
         val = hsv[2];
     }
 
+    private void resetColors() {
+        textColor = ColorPair.DEFAULT_TEXT;
+        backgroundColor = ColorPair.DEFAULT_BACKGROUND;
+
+        textGradientEnabled = false;
+
+        textGradientStart = ColorPair.DEFAULT_GRADIENT_START;
+        textGradientEnd = ColorPair.DEFAULT_GRADIENT_END;
+
+        loadTarget();
+    }
+
+    private void savePreset(int slot) {
+        storeTarget();
+
+        ClientConfig.savePreset(
+                slot,
+                currentColors()
+        );
+    }
+
+    private void loadPreset(int slot) {
+        ColorPair preset = ClientConfig.getPreset(slot);
+
+        if (preset == null) {
+            return;
+        }
+
+        textColor = preset.text();
+        backgroundColor = preset.background();
+
+        textGradientEnabled = preset.textGradientEnabled();
+        textGradientStart = preset.textGradientStart();
+        textGradientEnd = preset.textGradientEnd();
+
+        loadTarget();
+
+        // Apply immediately.
+        ClientConfig.save(preset, showOwnNameplate);
+
+        ClientGameEvents.applyLocally();
+        ClientGameEvents.sendToServer(preset);
+    }
+
     private void apply() {
         storeTarget();
 
-        ColorPair colors = new ColorPair(
-                textColor,
-                backgroundColor,
-                textGradientEnabled,
-                textGradientStart,
-                textGradientEnd
-        );
+        ColorPair colors = currentColors();
 
         ClientConfig.save(colors, showOwnNameplate);
 
@@ -422,8 +549,8 @@ public class ColorPickerScreen extends Screen {
         gg.fill(
                 left,
                 top,
-                left + PANEL_W,
-                top + PANEL_H,
+                left + panelWidth,
+                top + panelHeight,
                 0xF0101010
         );
 
@@ -431,8 +558,8 @@ public class ColorPickerScreen extends Screen {
                 gg,
                 left,
                 top,
-                PANEL_W,
-                PANEL_H,
+                panelWidth,
+                panelHeight,
                 0xFF3C3C3C
         );
     }
@@ -446,107 +573,165 @@ public class ColorPickerScreen extends Screen {
     ) {
         super.render(gg, mouseX, mouseY, partialTick);
 
-        int contentX = left + PAD;
+        // Header
 
         gg.drawCenteredString(
                 this.font,
                 this.title,
-                left + PANEL_W / 2,
-                top + 8,
+                left + panelWidth / 2,
+                topY(4),
                 0xFFFFFFFF
         );
+
+        if (showOfflineNotice) {
+            gg.drawString(
+                    this.font,
+                    "Offline",
+                    left + panelWidth - font.width("Offline") - PAD,
+                    topY(5),
+                    0xFFAAAAAA
+            );
+        }
+
+        // Selected tab outline
 
         drawTabOutline(gg, textTab, target == ColorTarget.TEXT);
         drawTabOutline(gg, backgroundTab, target == ColorTarget.BACKGROUND);
         drawTabOutline(gg, gradientStartTab, target == ColorTarget.GRADIENT_START);
         drawTabOutline(gg, gradientEndTab, target == ColorTarget.GRADIENT_END);
 
+        // Left column: color editor
+
         drawSaturationValue(
                 gg,
                 contentX,
-                top + SV_Y
+                topY(SV_Y)
         );
 
         drawHueStrip(
                 gg,
                 contentX,
-                top + HUE_Y
+                topY(HUE_Y)
         );
 
         if (isGradientTarget()) {
             gg.fill(
                     contentX,
-                    top + ALPHA_Y,
-                    contentX + CONTENT_W,
-                    top + ALPHA_Y + STRIP_H,
+                    topY(ALPHA_Y),
+                    contentX + leftColumnWidth,
+                    topY(ALPHA_Y) + Math.max(6, scaled(7)),
                     0xFF303030
             );
 
             gg.drawCenteredString(
                     this.font,
                     "RGB only",
-                    contentX + CONTENT_W / 2,
-                    top + ALPHA_Y + 1,
+                    contentX + leftColumnWidth / 2,
+                    topY(ALPHA_Y),
                     0xFFBBBBBB
             );
         } else {
             drawAlphaStrip(
                     gg,
                     contentX,
-                    top + ALPHA_Y
+                    topY(ALPHA_Y)
             );
         }
 
-        // Current color swatch
+        // Selected color swatch
+
         int selectedColor = isGradientTarget()
                 ? hsvToRgb(hue, sat, val)
-                : ColorPair.withAlpha(hsvToRgb(hue, sat, val), alpha);
+                : ColorPair.withAlpha(
+                hsvToRgb(hue, sat, val),
+                alpha
+        );
+
+        int hexY = topY(HEX_Y);
+        int hexHeight = Math.max(12, scaled(15));
 
         gg.fill(
                 contentX,
-                top + ROW_Y,
-                contentX + 20,
-                top + ROW_Y + 16,
+                hexY,
+                contentX + 19,
+                hexY + hexHeight,
                 0xFF202020
         );
 
         drawChecker(
                 gg,
                 contentX + 1,
-                top + ROW_Y + 1,
-                18,
-                14
+                hexY + 1,
+                17,
+                hexHeight - 2
         );
 
         gg.fill(
                 contentX + 1,
-                top + ROW_Y + 1,
-                contentX + 19,
-                top + ROW_Y + 15,
+                hexY + 1,
+                contentX + 18,
+                hexY + hexHeight - 1,
                 selectedColor
         );
 
-        drawPreview(
-                gg,
-                contentX + 100,
-                top + ROW_Y
+        // Right column: preview and presets
+
+        gg.drawString(
+                this.font,
+                "Preview",
+                rightX,
+                topY(25),
+                0xFFAAAAAA
         );
 
-        drawPresets(
+        drawNameplatePreview(
+                gg,
+                rightX,
+                topY(PREVIEW_Y),
+                rightColumnWidth,
+                scaled(PREVIEW_H),
+                currentColors()
+        );
+
+        gg.drawString(
+                this.font,
+                "Presets",
+                rightX,
+                topY(PRESET_TITLE_Y),
+                0xFFFFFFFF
+        );
+
+        drawPresetRows(
+                gg,
+                mouseX,
+                mouseY
+        );
+
+        // Bottom toggles
+
+        drawToggle(
                 gg,
                 contentX,
-                top + PRESET_Y
+                toggleY(),
+                toggleWidth(),
+                scaled(14),
+                "Gradient",
+                textGradientEnabled,
+                mouseX,
+                mouseY
         );
 
-        if (showOfflineNotice) {
-            gg.drawCenteredString(
-                    this.font,
-                    Component.translatable("screen.nameplatesplus.offline"),
-                    this.width / 2,
-                    top + PANEL_H + 6,
-                    0xFFAAAAAA
-            );
-        }
+        drawToggle(
+                gg,
+                contentX + toggleWidth() + 4,
+                toggleY(),
+                toggleWidth(),
+                scaled(14),
+                "Own name",
+                showOwnNameplate,
+                mouseX,
+                mouseY
+        );
     }
 
     private void drawTabOutline(
@@ -554,7 +739,7 @@ public class ColorPickerScreen extends Screen {
             Button button,
             boolean selected
     ) {
-        if (!selected) {
+        if (!selected || button == null) {
             return;
         }
 
@@ -573,28 +758,36 @@ public class ColorPickerScreen extends Screen {
             int x,
             int y
     ) {
+        int width = leftColumnWidth;
+        int height = Math.max(36, scaled(43));
+
         int pure = hsvToRgb(hue, 1.0F, 1.0F);
 
-        for (int i = 0; i < CONTENT_W; i++) {
+        for (int i = 0; i < width; i++) {
             int topColor = 0xFF000000 |
                     lerpRgb(
                             0xFFFFFF,
                             pure,
-                            (float) i / (CONTENT_W - 1)
+                            (float) i / Math.max(1, width - 1)
                     );
 
             gg.fillGradient(
                     x + i,
                     y,
                     x + i + 1,
-                    y + SV_H,
+                    y + height,
                     topColor,
                     0xFF000000
             );
         }
 
-        int cursorX = x + Math.round(sat * (CONTENT_W - 1));
-        int cursorY = y + Math.round((1.0F - val) * (SV_H - 1));
+        int cursorX = x + Math.round(
+                sat * (width - 1)
+        );
+
+        int cursorY = y + Math.round(
+                (1.0F - val) * (height - 1)
+        );
 
         outline(
                 gg,
@@ -620,15 +813,18 @@ public class ColorPickerScreen extends Screen {
             int x,
             int y
     ) {
-        for (int i = 0; i < CONTENT_W; i++) {
+        int width = leftColumnWidth;
+        int height = Math.max(6, scaled(7));
+
+        for (int i = 0; i < width; i++) {
             gg.fill(
                     x + i,
                     y,
                     x + i + 1,
-                    y + STRIP_H,
+                    y + height,
                     0xFF000000 |
                             hsvToRgb(
-                                    (float) i / (CONTENT_W - 1),
+                                    (float) i / Math.max(1, width - 1),
                                     1.0F,
                                     1.0F
                             )
@@ -637,8 +833,9 @@ public class ColorPickerScreen extends Screen {
 
         drawSliderKnob(
                 gg,
-                x + Math.round(hue * (CONTENT_W - 1)),
-                y
+                x + Math.round(hue * (width - 1)),
+                y,
+                height
         );
     }
 
@@ -647,142 +844,120 @@ public class ColorPickerScreen extends Screen {
             int x,
             int y
     ) {
+        int width = leftColumnWidth;
+        int height = Math.max(6, scaled(7));
+
         drawChecker(
                 gg,
                 x,
                 y,
-                CONTENT_W,
-                STRIP_H
+                width,
+                height
         );
 
         int rgb = hsvToRgb(hue, sat, val);
 
-        for (int i = 0; i < CONTENT_W; i++) {
+        for (int i = 0; i < width; i++) {
             int a = Math.round(
-                    255.0F * i / (CONTENT_W - 1)
+                    255.0F * i / Math.max(1, width - 1)
             );
 
             gg.fill(
                     x + i,
                     y,
                     x + i + 1,
-                    y + STRIP_H,
+                    y + height,
                     ColorPair.withAlpha(rgb, a)
             );
         }
 
         drawSliderKnob(
                 gg,
-                x + Math.round(alpha / 255.0F * (CONTENT_W - 1)),
-                y
+                x + Math.round(alpha / 255.0F * (width - 1)),
+                y,
+                height
         );
     }
 
     private void drawSliderKnob(
             GuiGraphics gg,
-            int centreX,
-            int y
+            int centerX,
+            int y,
+            int height
     ) {
         outline(
                 gg,
-                centreX - 2,
+                centerX - 2,
                 y - 2,
                 5,
-                STRIP_H + 4,
+                height + 4,
                 0xFF000000
         );
 
         outline(
                 gg,
-                centreX - 1,
+                centerX - 1,
                 y - 1,
                 3,
-                STRIP_H + 2,
+                height + 2,
                 0xFFFFFFFF
         );
     }
 
-    private void drawPresets(
+    private void drawNameplatePreview(
             GuiGraphics gg,
             int x,
-            int y
+            int y,
+            int width,
+            int height,
+            ColorPair colors
     ) {
-        for (int i = 0; i < SWATCH_COUNT; i++) {
-            int sx = x + i * (SWATCH_W + 1);
-
-            gg.fill(
-                    sx,
-                    y,
-                    sx + SWATCH_W,
-                    y + SWATCH_W,
-                    0xFF000000 | PRESETS[i]
-            );
-
-            outline(
-                    gg,
-                    sx,
-                    y,
-                    SWATCH_W,
-                    SWATCH_W,
-                    0xFF202020
-            );
-        }
-    }
-
-    private void drawPreview(
-            GuiGraphics gg,
-            int x,
-            int y
-    ) {
-        String name = this.minecraft != null && this.minecraft.player != null
-                ? this.minecraft.player.getGameProfile().getName()
-                : "Player";
-
-        int previewText = ColorPair.clampTextAlpha(textColor);
-        int previewBackground = backgroundColor;
-
-        int w = 96;
-
         drawChecker(
                 gg,
                 x,
                 y,
-                w,
-                16
+                width,
+                height
         );
 
-        int nameWidth = this.font.width(name);
-        int nameX = x + (w - nameWidth) / 2;
+        String name = width >= 55 ? "Player" : "P";
+
+        int textWidth = font.width(name);
+
+        int textX = x + (width - textWidth) / 2;
+        int textY = y + (height - 8) / 2;
 
         gg.fill(
-                nameX - 2,
-                y + 3,
-                nameX + nameWidth + 2,
-                y + 13,
-                previewBackground
+                textX - 3,
+                textY - 2,
+                textX + textWidth + 3,
+                textY + 10,
+                colors.background()
         );
 
-        if (textGradientEnabled && nameWidth > 0) {
+        int color = ColorPair.clampTextAlpha(colors.text());
+
+        if (colors.textGradientEnabled() && textWidth > 0) {
             Gradient gradient = new Gradient(
-                    textGradientStart,
-                    textGradientEnd
+                    colors.textGradientStart(),
+                    colors.textGradientEnd()
             );
 
             try (GradientRenderContext.Scope ignored =
                          GradientRenderContext.push(
                                  gradient,
                                  gg.pose().last().pose(),
-                                 nameX,
-                                 y + 4,
-                                 nameWidth
+                                 textX,
+                                 textY,
+                                 textWidth
                          )) {
 
                 gg.drawString(
                         this.font,
                         name,
-                        nameX,
-                        y + 4,
-                        previewText,
+                        textX,
+                        textY,
+                        color,
                         false
                 );
             }
@@ -790,9 +965,9 @@ public class ColorPickerScreen extends Screen {
             gg.drawString(
                     this.font,
                     name,
-                    nameX,
-                    y + 4,
-                    previewText,
+                    textX,
+                    textY,
+                    color,
                     false
             );
         }
@@ -801,9 +976,297 @@ public class ColorPickerScreen extends Screen {
                 gg,
                 x,
                 y,
-                w,
-                16,
-                0xFF202020
+                width,
+                height,
+                0xFF303030
+        );
+    }
+
+    private void drawPresetRows(
+            GuiGraphics gg,
+            int mouseX,
+            int mouseY
+    ) {
+        int rowHeight = presetRowHeight();
+        int previewX = presetPreviewX();
+
+        for (int i = 0; i < PRESET_COUNT; i++) {
+            int y = presetRowY(i);
+
+            gg.drawString(
+                    this.font,
+                    Integer.toString(i + 1),
+                    rightX,
+                    y + 2,
+                    0xFFBBBBBB
+            );
+
+            ColorPair preset = ClientConfig.getPreset(i);
+
+            if (preset == null) {
+                drawEmptyPresetPreview(
+                        gg,
+                        previewX,
+                        y,
+                        presetPreviewWidth,
+                        rowHeight
+                );
+            } else {
+                drawPresetPreview(
+                        gg,
+                        previewX,
+                        y,
+                        presetPreviewWidth,
+                        rowHeight,
+                        preset
+                );
+            }
+
+            boolean hoveringLoad = inside(
+                    mouseX,
+                    mouseY,
+                    presetLoadX(),
+                    y,
+                    presetActionWidth,
+                    rowHeight
+            );
+
+            boolean hoveringSave = inside(
+                    mouseX,
+                    mouseY,
+                    presetSaveX(),
+                    y,
+                    presetActionWidth,
+                    rowHeight
+            );
+
+            drawPresetAction(
+                    gg,
+                    presetLoadX(),
+                    y,
+                    presetActionWidth,
+                    rowHeight,
+                    preset != null ? "Load" : "L",
+                    preset != null,
+                    hoveringLoad
+            );
+
+            drawPresetAction(
+                    gg,
+                    presetSaveX(),
+                    y,
+                    presetActionWidth,
+                    rowHeight,
+                    "Save",
+                    true,
+                    hoveringSave
+            );
+        }
+    }
+
+    private void drawPresetPreview(
+            GuiGraphics gg,
+            int x,
+            int y,
+            int width,
+            int height,
+            ColorPair colors
+    ) {
+        gg.fill(
+                x,
+                y,
+                x + width,
+                y + height,
+                colors.background()
+        );
+
+        int barHeight = Math.max(3, height / 3);
+        int barY = y + (height - barHeight) / 2;
+
+        if (colors.textGradientEnabled()) {
+            Gradient gradient = new Gradient(
+                    colors.textGradientStart(),
+                    colors.textGradientEnd()
+            );
+
+            for (int i = 0; i < width; i++) {
+                float t = (float) i / Math.max(1, width - 1);
+
+                gg.fill(
+                        x + i,
+                        barY,
+                        x + i + 1,
+                        barY + barHeight,
+                        ColorPair.withAlpha(
+                                gradient.colorAt(t),
+                                ColorPair.alphaOf(colors.text())
+                        )
+                );
+            }
+        } else {
+            gg.fill(
+                    x,
+                    barY,
+                    x + width,
+                    barY + barHeight,
+                    colors.text()
+            );
+        }
+
+        outline(
+                gg,
+                x,
+                y,
+                width,
+                height,
+                0xFF303030
+        );
+    }
+
+    private void drawEmptyPresetPreview(
+            GuiGraphics gg,
+            int x,
+            int y,
+            int width,
+            int height
+    ) {
+        drawChecker(
+                gg,
+                x,
+                y,
+                width,
+                height
+        );
+
+        gg.drawCenteredString(
+                this.font,
+                "-",
+                x + width / 2,
+                y + 2,
+                0xFFAAAAAA
+        );
+
+        outline(
+                gg,
+                x,
+                y,
+                width,
+                height,
+                0xFF303030
+        );
+    }
+
+    private void drawPresetAction(
+            GuiGraphics gg,
+            int x,
+            int y,
+            int width,
+            int height,
+            String label,
+            boolean enabled,
+            boolean hovered
+    ) {
+        int background = !enabled
+                ? 0xFF202020
+                : hovered
+                ? 0xFF505050
+                : 0xFF383838;
+
+        int textColor = enabled
+                ? 0xFFFFFFFF
+                : 0xFF777777;
+
+        gg.fill(
+                x,
+                y,
+                x + width,
+                y + height,
+                background
+        );
+
+        outline(
+                gg,
+                x,
+                y,
+                width,
+                height,
+                0xFF555555
+        );
+
+        String displayLabel = width < 25
+                ? (label.equals("Load") ? "L" : "S")
+                : label;
+
+        gg.drawCenteredString(
+                this.font,
+                displayLabel,
+                x + width / 2,
+                y + (height - 8) / 2,
+                textColor
+        );
+    }
+
+    private void drawToggle(
+            GuiGraphics gg,
+            int x,
+            int y,
+            int width,
+            int height,
+            String label,
+            boolean enabled,
+            int mouseX,
+            int mouseY
+    ) {
+        boolean hovered = inside(
+                mouseX,
+                mouseY,
+                x,
+                y,
+                width,
+                height
+        );
+
+        int background = hovered
+                ? 0xFF505050
+                : 0xFF303030;
+
+        int statusColor = enabled
+                ? 0xFF70D990
+                : 0xFFAAAAAA;
+
+        gg.fill(
+                x,
+                y,
+                x + width,
+                y + height,
+                background
+        );
+
+        outline(
+                gg,
+                x,
+                y,
+                width,
+                height,
+                0xFF555555
+        );
+
+        gg.drawString(
+                this.font,
+                label,
+                x + 4,
+                y + (height - 8) / 2,
+                0xFFFFFFFF
+        );
+
+        String status = enabled ? "ON" : "OFF";
+
+        gg.drawString(
+                this.font,
+                status,
+                x + width - font.width(status) - 4,
+                y + (height - 8) / 2,
+                statusColor
         );
     }
 
@@ -811,19 +1274,19 @@ public class ColorPickerScreen extends Screen {
             GuiGraphics gg,
             int x,
             int y,
-            int w,
-            int h
+            int width,
+            int height
     ) {
-        for (int cy = 0; cy < h; cy += 4) {
-            for (int cx = 0; cx < w; cx += 4) {
+        for (int cy = 0; cy < height; cy += 4) {
+            for (int cx = 0; cx < width; cx += 4) {
                 boolean light =
                         ((cx / 4) + (cy / 4)) % 2 == 0;
 
                 gg.fill(
                         x + cx,
                         y + cy,
-                        Math.min(x + cx + 4, x + w),
-                        Math.min(y + cy + 4, y + h),
+                        Math.min(x + cx + 4, x + width),
+                        Math.min(y + cy + 4, y + height),
                         light ? 0xFFBFBFBF : 0xFF7F7F7F
                 );
             }
@@ -834,14 +1297,18 @@ public class ColorPickerScreen extends Screen {
             GuiGraphics gg,
             int x,
             int y,
-            int w,
-            int h,
+            int width,
+            int height,
             int color
     ) {
-        gg.fill(x, y, x + w, y + 1, color);
-        gg.fill(x, y + h - 1, x + w, y + h, color);
-        gg.fill(x, y, x + 1, y + h, color);
-        gg.fill(x + w - 1, y, x + w, y + h, color);
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
+        gg.fill(x, y, x + width, y + 1, color);
+        gg.fill(x, y + height - 1, x + width, y + height, color);
+        gg.fill(x, y, x + 1, y + height, color);
+        gg.fill(x + width - 1, y, x + width, y + height, color);
     }
 
     @Override
@@ -850,66 +1317,152 @@ public class ColorPickerScreen extends Screen {
             double mouseY,
             int button
     ) {
-        int contentX = left + PAD;
+        if (button == 0) {
+            // Preset actions
 
-        if (inside(
-                mouseX,
-                mouseY,
-                contentX,
-                top + SV_Y,
-                CONTENT_W,
-                SV_H
-        )) {
-            drag = Drag.SV;
-            dragTo(mouseX, mouseY);
-            return true;
-        }
+            for (int i = 0; i < PRESET_COUNT; i++) {
+                int y = presetRowY(i);
+                int height = presetRowHeight();
 
-        if (inside(
-                mouseX,
-                mouseY,
-                contentX,
-                top + HUE_Y,
-                CONTENT_W,
-                STRIP_H
-        )) {
-            drag = Drag.HUE;
-            dragTo(mouseX, mouseY);
-            return true;
-        }
+                if (!inside(
+                        mouseX,
+                        mouseY,
+                        presetLoadX(),
+                        y,
+                        presetActionWidth,
+                        height
+                ) && !inside(
+                        mouseX,
+                        mouseY,
+                        presetSaveX(),
+                        y,
+                        presetActionWidth,
+                        height
+                )) {
+                    continue;
+                }
 
-        if (!isGradientTarget() && inside(
-                mouseX,
-                mouseY,
-                contentX,
-                top + ALPHA_Y,
-                CONTENT_W,
-                STRIP_H
-        )) {
-            drag = Drag.ALPHA;
-            dragTo(mouseX, mouseY);
-            return true;
-        }
+                if (inside(
+                        mouseX,
+                        mouseY,
+                        presetLoadX(),
+                        y,
+                        presetActionWidth,
+                        height
+                )) {
+                    loadPreset(i);
+                } else {
+                    savePreset(i);
+                }
 
-        if (inside(
-                mouseX,
-                mouseY,
-                contentX,
-                top + PRESET_Y,
-                SWATCH_COUNT * (SWATCH_W + 1),
-                SWATCH_W
-        )) {
-            int index = (int) (
-                    (mouseX - contentX) / (SWATCH_W + 1)
-            );
+                return true;
+            }
 
-            if (index >= 0 && index < SWATCH_COUNT) {
+            // Gradient toggle
+
+            if (inside(
+                    mouseX,
+                    mouseY,
+                    contentX,
+                    toggleY(),
+                    toggleWidth(),
+                    scaled(14)
+            )) {
+                textGradientEnabled = !textGradientEnabled;
+                return true;
+            }
+
+            // Own nameplate toggle
+
+            if (inside(
+                    mouseX,
+                    mouseY,
+                    contentX + toggleWidth() + 4,
+                    toggleY(),
+                    toggleWidth(),
+                    scaled(14)
+            )) {
+                showOwnNameplate = !showOwnNameplate;
+                return true;
+            }
+
+            // Saturation / value
+
+            if (inside(
+                    mouseX,
+                    mouseY,
+                    contentX,
+                    topY(SV_Y),
+                    leftColumnWidth,
+                    Math.max(36, scaled(43))
+            )) {
+                drag = Drag.SV;
+                dragTo(mouseX, mouseY);
+                return true;
+            }
+
+            // Hue
+
+            if (inside(
+                    mouseX,
+                    mouseY,
+                    contentX,
+                    topY(HUE_Y),
+                    leftColumnWidth,
+                    Math.max(6, scaled(7))
+            )) {
+                drag = Drag.HUE;
+                dragTo(mouseX, mouseY);
+                return true;
+            }
+
+            // Alpha
+
+            if (!isGradientTarget() && inside(
+                    mouseX,
+                    mouseY,
+                    contentX,
+                    topY(ALPHA_Y),
+                    leftColumnWidth,
+                    Math.max(6, scaled(7))
+            )) {
+                drag = Drag.ALPHA;
+                dragTo(mouseX, mouseY);
+                return true;
+            }
+
+            // Preset color swatches
+
+            int swatchY = topY(HEX_Y) + scaled(18);
+
+            if (inside(
+                    mouseX,
+                    mouseY,
+                    contentX,
+                    swatchY,
+                    leftColumnWidth,
+                    scaled(10)
+            )) {
+                int swatchWidth = Math.max(
+                        1,
+                        leftColumnWidth / PRESETS.length
+                );
+
+                int index = (int) (
+                        (mouseX - contentX) / swatchWidth
+                );
+
+                index = Math.max(
+                        0,
+                        Math.min(PRESETS.length - 1, index)
+                );
+
                 setFromRgb(PRESETS[index]);
                 storeTarget();
                 updateHexBox();
-            }
 
-            return true;
+                return true;
+            }
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
@@ -956,10 +1509,9 @@ public class ColorPickerScreen extends Screen {
             double mouseX,
             double mouseY
     ) {
-        int contentX = left + PAD;
-
         float px = clamp01(
-                (float) (mouseX - contentX) / (CONTENT_W - 1)
+                (float) (mouseX - contentX)
+                        / Math.max(1, leftColumnWidth - 1)
         );
 
         switch (drag) {
@@ -967,7 +1519,8 @@ public class ColorPickerScreen extends Screen {
                 sat = px;
 
                 val = 1.0F - clamp01(
-                        (float) (mouseY - (top + SV_Y)) / (SV_H - 1)
+                        (float) (mouseY - topY(SV_Y))
+                                / Math.max(1, scaled(43) - 1)
                 );
             }
 
@@ -993,17 +1546,19 @@ public class ColorPickerScreen extends Screen {
             double mouseY,
             int x,
             int y,
-            int w,
-            int h
+            int width,
+            int height
     ) {
         return mouseX >= x
-                && mouseX < x + w
+                && mouseX < x + width
                 && mouseY >= y
-                && mouseY < y + h;
+                && mouseY < y + height;
     }
 
-    private static float clamp01(float v) {
-        return v < 0.0F ? 0.0F : Math.min(v, 1.0F);
+    private static float clamp01(float value) {
+        return value < 0.0F
+                ? 0.0F
+                : Math.min(value, 1.0F);
     }
 
     private static int lerpRgb(
@@ -1013,12 +1568,14 @@ public class ColorPickerScreen extends Screen {
     ) {
         int r = Math.round(
                 ((from >> 16) & 0xFF)
-                        + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t
+                        + (((to >> 16) & 0xFF)
+                        - ((from >> 16) & 0xFF)) * t
         );
 
         int g = Math.round(
                 ((from >> 8) & 0xFF)
-                        + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t
+                        + (((to >> 8) & 0xFF)
+                        - ((from >> 8) & 0xFF)) * t
         );
 
         int b = Math.round(
