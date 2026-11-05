@@ -1,6 +1,6 @@
 # Nameplates+
 
-A mod that let's you pick colors for the text and background of your nameplate.
+A mod that lets you pick colors for the text and background of your nameplate.
 
 ## Opening the picker
 
@@ -12,7 +12,7 @@ Turn on **Show my nameplate in F5** to see your own nameplate in third person wh
 
 ## Install
 
-It's a server-sided mod but players without the mod can still join, they just see normal nameplates. On a server without the mod your colours aren't shown.
+It's a server-sided mod but players without the mod can still join, they just see normal nameplates. On a server without the mod your colors aren't shown.
 
 ## Building
 
