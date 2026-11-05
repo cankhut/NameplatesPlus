@@ -1,0 +1,10 @@
+{
+  "key.categories.nameplatesplus": "Nameplates+",
+  "key.nameplatesplus.open": "Open Nameplates+",
+  "screen.nameplatesplus.title": "Nameplates+",
+  "screen.nameplatesplus.text": "Text",
+  "screen.nameplatesplus.background": "Background",
+  "screen.nameplatesplus.reset": "Reset",
+  "screen.nameplatesplus.show_own": "Show my nameplate in F5",
+  "screen.nameplatesplus.offline": "This server doesn't have Nameplates+, so your colours won't show here."
+}
