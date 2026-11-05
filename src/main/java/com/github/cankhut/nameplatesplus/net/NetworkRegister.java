@@ -15,7 +15,7 @@ public final class NetworkRegister {
 
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("1").optional();
+        PayloadRegistrar registrar = event.registrar("2").optional();
 
         registrar.playToServer(
                 SetColorsPayload.TYPE,
@@ -30,15 +30,32 @@ public final class NetworkRegister {
         );
     }
 
-    private static void handleSetColors(SetColorsPayload payload, IPayloadContext context) {
+    private static void handleSetColors(
+            SetColorsPayload payload,
+            IPayloadContext context
+    ) {
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer sender) {
-                ServerColorStore.update(sender, new ColorPair(payload.text(), payload.background()));
+                ServerColorStore.update(
+                        sender,
+                        new ColorPair(
+                                payload.text(),
+                                payload.background(),
+                                payload.textGradientEnabled(),
+                                payload.textGradientStart(),
+                                payload.textGradientEnd()
+                        )
+                );
             }
         });
     }
 
-    private static void handleSyncColors(SyncColorsPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> payload.colors().forEach(NameplateColorStore::put));
+    private static void handleSyncColors(
+            SyncColorsPayload payload,
+            IPayloadContext context
+    ) {
+        context.enqueueWork(() ->
+                payload.colors().forEach(NameplateColorStore::put)
+        );
     }
 }

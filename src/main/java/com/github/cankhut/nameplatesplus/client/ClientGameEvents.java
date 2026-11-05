@@ -22,6 +22,7 @@ public final class ClientGameEvents {
     @SubscribeEvent
     public static void onTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
+
         while (ClientModEvents.OPEN_PICKER.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
                 minecraft.setScreen(new ColorPickerScreen(null));
@@ -32,10 +33,12 @@ public final class ClientGameEvents {
     @SubscribeEvent
     public static void onRenderNameTag(RenderNameTagEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
+
         if (event.getEntity() == minecraft.player
                 && ClientConfig.SHOW_OWN_NAMEPLATE.getAsBoolean()
                 && Minecraft.renderNames()
                 && !minecraft.player.isInvisible()) {
+
             event.setCanRender(TriState.TRUE);
         }
     }
@@ -53,8 +56,12 @@ public final class ClientGameEvents {
 
     public static void applyLocally() {
         Minecraft minecraft = Minecraft.getInstance();
+
         if (minecraft.player != null) {
-            NameplateColorStore.put(minecraft.player.getUUID(), ClientConfig.get());
+            NameplateColorStore.put(
+                    minecraft.player.getUUID(),
+                    ClientConfig.get()
+            );
         }
     }
 
@@ -64,14 +71,27 @@ public final class ClientGameEvents {
 
     public static boolean serverHasMod() {
         ClientPacketListener listener = Minecraft.getInstance().getConnection();
+
         return listener != null && listener.hasChannel(SetColorsPayload.TYPE);
     }
 
     public static void sendToServer() {
+        sendToServer(ClientConfig.get());
+    }
+
+    public static void sendToServer(ColorPair colors) {
         if (!serverHasMod()) {
             return;
         }
-        ColorPair colors = ClientConfig.get();
-        PacketDistributor.sendToServer(new SetColorsPayload(colors.text(), colors.background()));
+
+        PacketDistributor.sendToServer(
+                new SetColorsPayload(
+                        colors.text(),
+                        colors.background(),
+                        colors.textGradientEnabled(),
+                        colors.textGradientStart(),
+                        colors.textGradientEnd()
+                )
+        );
     }
 }

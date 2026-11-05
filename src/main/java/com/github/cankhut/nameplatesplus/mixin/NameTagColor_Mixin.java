@@ -2,6 +2,8 @@ package com.github.cankhut.nameplatesplus.mixin;
 
 import com.github.cankhut.nameplatesplus.ColorPair;
 import com.github.cankhut.nameplatesplus.NameplateColorStore;
+import com.github.cankhut.nameplatesplus.client.render.GradientRenderContext;
+import com.github.cankhut.nameplatesplus.util.Gradient;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
@@ -18,6 +20,17 @@ import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(value = EntityRenderer.class, priority = 1100)
 public abstract class NameTagColor_Mixin<T extends Entity> {
+
+    private static Gradient getTextGradient(ColorPair colors) {
+        if (colors == null || !colors.textGradientEnabled()) {
+            return null;
+        }
+
+        return new Gradient(
+                colors.textGradientStart(),
+                colors.textGradientEnd()
+        );
+    }
 
     @WrapOperation(
             method = "renderNameTag",
@@ -39,17 +52,57 @@ public abstract class NameTagColor_Mixin<T extends Entity> {
             DisplayMode mode,
             int backgroundColor,
             int light,
-            Operation<Integer> original, @Local(argsOnly = true) T entity
+            Operation<Integer> original,
+            @Local(argsOnly = true) T entity
     ) {
         ColorPair colors = nameplatesplus$lookup(entity);
+
         if (colors != null) {
-            color = (color & 0xFF000000) | (colors.text() & 0xFFFFFF);
-            if (backgroundColor != 0) {
-                backgroundColor = colors.background();
-            }
+            color = colors.text();
+            backgroundColor = colors.background();
         }
 
-        return original.call(font, text, x, y, color, shadow, matrix, buffers, mode, backgroundColor, light);
+        Gradient gradient = getTextGradient(colors);
+
+        if (gradient == null) {
+            return original.call(
+                    font,
+                    text,
+                    x,
+                    y,
+                    color,
+                    shadow,
+                    matrix,
+                    buffers,
+                    mode,
+                    backgroundColor,
+                    light
+            );
+        }
+
+        try (GradientRenderContext.Scope ignored =
+                     GradientRenderContext.push(
+                             gradient,
+                             matrix,
+                             x,
+                             y,
+                             font.width(text)
+                     )) {
+
+            return original.call(
+                    font,
+                    text,
+                    x,
+                    y,
+                    color,
+                    shadow,
+                    matrix,
+                    buffers,
+                    mode,
+                    backgroundColor,
+                    light
+            );
+        }
     }
 
     @WrapOperation(
@@ -72,20 +125,63 @@ public abstract class NameTagColor_Mixin<T extends Entity> {
             DisplayMode mode,
             int backgroundColor,
             int light,
-            Operation<Integer> original, @Local(argsOnly = true) T entity
+            Operation<Integer> original,
+            @Local(argsOnly = true) T entity
     ) {
         ColorPair colors = nameplatesplus$lookup(entity);
+
         if (colors != null) {
             color = colors.text();
         }
 
-        return original.call(font, text, x, y, color, shadow, matrix, buffers, mode, backgroundColor, light);
+        Gradient gradient = getTextGradient(colors);
+
+        if (gradient == null) {
+            return original.call(
+                    font,
+                    text,
+                    x,
+                    y,
+                    color,
+                    shadow,
+                    matrix,
+                    buffers,
+                    mode,
+                    backgroundColor,
+                    light
+            );
+        }
+
+        try (GradientRenderContext.Scope ignored =
+                     GradientRenderContext.push(
+                             gradient,
+                             matrix,
+                             x,
+                             y,
+                             font.width(text)
+                     )) {
+
+            return original.call(
+                    font,
+                    text,
+                    x,
+                    y,
+                    color,
+                    shadow,
+                    matrix,
+                    buffers,
+                    mode,
+                    backgroundColor,
+                    light
+            );
+        }
     }
 
     private static ColorPair nameplatesplus$lookup(Entity entity) {
         if (entity instanceof Player player) {
             return NameplateColorStore.get(player.getUUID());
         }
+
         return null;
     }
 }
