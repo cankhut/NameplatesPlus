@@ -21,3 +21,9 @@ It's a server-sided mod but players without the mod can still join, they just se
 ```
 
 The jar lands in `build/libs/`.
+
+## Licence
+
+GNU General Public License v3.0. See [LICENSE](LICENSE).
+
+You can use, change and share this mod, but if you share a changed version, you have to publish its source code under the same licence.
